@@ -9,6 +9,11 @@ configure do
 end
 
 helpers do
+
+  def h(content)
+    Rack::Utils.escape_html(content)
+  end
+
   def all_checked?(list)
     !list[:todos].empty? && !list[:todos].any? { |todo| !todo[:completed] }
   end
@@ -28,7 +33,6 @@ helpers do
   def sort_items(items, &block)
     completed = {}
     incompleted = {}
-
     items.each_with_index do |item, idx|
       item_completed?(item) ? completed[item] = idx : incompleted[item] = idx
     end
@@ -39,6 +43,13 @@ end
 
 before do
   session[:lists] ||= []
+end
+
+def load_list(index)
+  list = session[:lists][index]
+  return list if list
+  session[:error] = 'The specified list was not found.'
+  redirect '/lists'
 end
 
 get '/' do
@@ -57,20 +68,26 @@ end
 # View a single list
 get '/lists/:id' do
   @list_id = params[:id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   erb :list, layout: :layout
 end
 
 def error_for_list_name(name)
   if !(1..100).cover? name.size
     'List name must be between 1 and 100 characters.'
+  elsif !!(name =~ /[^A-Za-z0-9!.,\? ]/)
+    'List name may only contain letters, numbers, and common punctuation.'
   elsif session[:lists].any? { |list| list[:name] == name }
     'List name must be unique.'
   end
 end
 
 def error_for_todo(name)
-  'Todo must be between 1 and 100 characters.' unless (1..100).cover? name.size
+  if !(1..100).cover?(name.size)
+    'Todo must be between 1 and 100 characters.'
+  elsif !!(name =~ /[^A-Za-z0-9!.,\? ]/)
+    'Todo name may only contain letters, numbers, and common punctuation.'
+  end
 end
 
 # Create a new list
@@ -91,7 +108,7 @@ end
 # edit an existing list
 get '/lists/:id/edit' do
   @list_id = params[:id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   erb :edit_list, layout: :layout
 end
 
@@ -99,7 +116,7 @@ end
 post '/lists/:id/edit' do
   list_name = params[:list_name].strip
   id = params[:id].to_i
-  @list = session[:lists][id]
+  @list = load_list(id)
 
   error = error_for_list_name(list_name)
   if error
@@ -124,7 +141,7 @@ end
 post '/lists/:list_id/todos/:todo_num/check' do
   todo_num = params[:todo_num].to_i
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   is_completed = params[:completed] == 'true'
   @list[:todos][todo_num][:completed] = is_completed
   session[:success] = 'The todo has been updated.'
@@ -134,7 +151,7 @@ end
 # Check-off all to-dos
 post '/lists/:list_id/check_all' do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   @list[:todos].each { |todo| todo[:completed] = true }
   session[:success] = 'All todos have been completed.'
   redirect "/lists/#{@list_id}"
@@ -144,7 +161,7 @@ end
 post '/lists/:list_id/todos/:todo_num/destroy' do
   todo_num = params[:todo_num].to_i
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   @list[:todos].delete_at todo_num
   session[:success] = 'The todo has been deleted.'
   redirect "/lists/#{@list_id}"
@@ -153,7 +170,7 @@ end
 # Add a new todo to a list
 post '/lists/:list_id/todos' do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   text = params[:todo].strip
 
   error = error_for_todo(text)

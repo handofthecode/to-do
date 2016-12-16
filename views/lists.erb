@@ -1,8 +1,8 @@
 <ul id="lists">
-  <% sort_items(@lists) do |list, id| %> 
+  <% sort_items(@lists) do |list| %> 
     <li class="<%= list_class(list) %>">
-      <a href="/lists/<%= id %>">
-        <h2 class="complete"><%== list[:name] %></h2>
+      <a href="/lists/<%= list[:id] %>">
+        <h2 class="complete"><%= list[:name] %></h2>
         <p><%= todos_remaining(list) %></p>
       </a>
     </li>
